@@ -35,7 +35,7 @@ wire [IF_ID_SIZE-1:0] IF_ID_o;
 
 /**** ID stage ****/
 
-parameter ID_EX_SIZE = 185;
+parameter ID_EX_SIZE = 190;
 
 //control signal
 wire ID_Branch_o;
@@ -79,6 +79,7 @@ wire [31:0] EX_current_pc_plus_4_i;
 wire [31:0] EX_Rs_data_i;
 wire [31:0] EX_Rt_data_i;
 wire [31:0]EX_sign_extended_val_i;
+wire [4:0] EX_instr_i_25_21;
 wire [4:0] EX_instr_i_20_16;
 wire [4:0] EX_instr_i_15_11;
 
@@ -92,6 +93,11 @@ wire EX_ALU_zero_o;
 wire [5-1:0] EX_RegDst_addr_o;
 wire [EX_MEM_SIZE-1:0] EX_MEM_i;
 wire [EX_MEM_SIZE-1:0] EX_MEM_o;
+
+wire [1:0] ALU_Src1_select;
+wire [1:0] ALU_Src2_select;
+wire [31:0] ALU_Src1_o;
+wire [31:0] ALU_Src2_o;
 
 /**** MEM stage ****/
 
@@ -155,7 +161,7 @@ ProgramCounter PC(
 	);
 
 Instr_Memory IM(
-	.pc_addr_i(IF_current_pc),
+	.addr_i(IF_current_pc),
 	.instr_o(IF_instr_o)
 	);
 
@@ -217,6 +223,7 @@ Sign_Extend Sign_Extend(
 	);
 
 // 32-bit jump address
+assign ID_EX_i[189:185] = ID_instr_i[25:21]; //extra IF/ID Register Rs
 assign ID_EX_i[184:181] = ID_current_pc_plus_4_i[31:28];
 assign ID_EX_i[180:153] = ID_Jump_Addr_28_bits_o;
 
@@ -261,6 +268,7 @@ assign EX_current_pc_plus_4_i = ID_EX_o[137-:32];
 assign EX_Rs_data_i = ID_EX_o[105-:32];
 assign EX_Rt_data_i = ID_EX_o[73-:32];
 assign EX_sign_extended_val_i = ID_EX_o[41-:32];
+assign EX_instr_i_25_21 = ID_EX_o[189:185];
 assign EX_instr_i_20_16 = ID_EX_o[9:5];
 assign EX_instr_i_15_11 = ID_EX_o[4:0];
 
@@ -276,7 +284,7 @@ Adder Branch_Addr_adder (
 );
 
 ALU ALU(
-	.src1_i(EX_Rs_data_i),
+	.src1_i(ALU_Src1_o),
 	.src2_i(EX_ALUSrc_data_o),
 	.ctrl_i(EX_ALUCtrl_o),
 	.result_o(EX_ALU_result_o),
@@ -290,8 +298,23 @@ ALU_Ctrl ALU_Control(
 	.Jump_Reg_o(EX_Jump_Reg_o)
 	);
 
-MUX_2to1 #(.size(32)) Mux1(
+MUX_3to1 #(.size(32)) ALU_Src1(
+	.data0_i(EX_Rs_data_i),
+	.data1_i(WB_MemToReg_data_o),
+	.data2_i(MEM_ALU_result_i),
+	.select_i(ALU_Src1_select),
+	.data_o(ALU_Src1_o)
+	);
+MUX_3to1 #(.size(32)) ALU_Src2(
 	.data0_i(EX_Rt_data_i),
+	.data1_i(WB_MemToReg_data_o),
+	.data2_i(MEM_ALU_result_i),
+	.select_i(ALU_Src2_select),
+	.data_o(ALU_Src2_o)
+	);
+
+MUX_2to1 #(.size(32)) Mux1(
+	.data0_i(ALU_Src2_o),
 	.data1_i(EX_sign_extended_val_i),
 	.select_i(EX_ALUSrc_i),
 	.data_o(EX_ALUSrc_data_o)
@@ -303,6 +326,17 @@ MUX_3to1 #(.size(5)) Mux2(
 	.data2_i(5'd31),
 	.select_i(EX_RegDst_i),
 	.data_o(EX_RegDst_addr_o)
+	);
+
+Forwarding_Unit ForwardingUnit( /////////////////////////////////
+	.ID_EX_Register_Rs(EX_instr_i_25_21),
+    .ID_EX_Register_Rt(EX_instr_i_20_16),
+    .EX_MEM_Register_Rd(MEM_RegDst_addr_i),
+    .EX_MEM_RegWrite(MEM_RegWrite_i),
+    .MEM_WB_Register_Rd(WB_RegDst_addr_i),
+    .MEM_WB_RegWrite(WB_RegWrite_o),
+    .Forward_A(ALU_Src1_select),
+    .Forward_B(ALU_Src2_select)
 	);
 
 assign EX_MEM_i[175:144] = EX_Jump_Addr_i;
