@@ -1,0 +1,8 @@
+*.doc
+*.docx
+*.pdf
+work/
+*.mpf
+*.mti
+*.wlf
+*.zip
