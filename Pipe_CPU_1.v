@@ -58,6 +58,13 @@ wire [32-1:0] ID_Rt_data_o;
 wire [32-1:0] ID_sign_extended_val;
 wire [ID_EX_SIZE-1:0] ID_EX_i;
 wire [ID_EX_SIZE-1:0] ID_EX_o;
+wire [14:0] ID_HazardFlush_Src1;
+wire [14:0] ID_HazardFlush_Results;
+wire ID_Flush;
+wire IF_Flush;
+wire IF_ID_WriteDisable;
+wire EX_Flush;
+wire PC_WriteDisable;
 
 /**** EX stage ****/
 
@@ -98,6 +105,9 @@ wire [1:0] ALU_Src1_select;
 wire [1:0] ALU_Src2_select;
 wire [31:0] ALU_Src1_o;
 wire [31:0] ALU_Src2_o;
+
+wire [8:0] EX_HazardFlush_Src1;
+wire [8:0] EX_HazardFlush_Results;
 
 /**** MEM stage ****/
 
@@ -217,26 +227,55 @@ Decoder Control(
 	.RegDst_o(ID_RegDst_o)
 	);
 
+assign ID_HazardFlush_Src1[14] = ID_Branch_o;
+assign ID_HazardFlush_Src1[13:12] = ID_MemToReg_o;
+assign ID_HazardFlush_Src1[11:10] = ID_BranchType_o;
+assign ID_HazardFlush_Src1[9] = ID_Jump_o;
+assign ID_HazardFlush_Src1[8] = ID_MemRead_o;
+assign ID_HazardFlush_Src1[7] = ID_MemWrite_o;
+assign ID_HazardFlush_Src1[6:4] = ID_ALUOp_o;
+assign ID_HazardFlush_Src1[3] = ID_ALUSrc_o;
+assign ID_HazardFlush_Src1[2] = ID_RegWrite_o;
+assign ID_HazardFlush_Src1[1:0] = ID_RegDst_o;
+
 Sign_Extend Sign_Extend(
 	.data_i(ID_instr_i[15:0]),
 	.data_o(ID_sign_extended_val)
 	);
 
+Hazard_Detection_Unit Hazard_Detection(
+	.ID_EX_Register_Rt(EX_instr_i_20_16),
+    .IF_ID_Register_Rs(ID_instr_i[25:21]),
+    .IF_ID_Register_Rt(ID_instr_i[20:21]),
+    .ID_EX_MemRead(EX_MemRead_i),
+    .ID_Controls_Flush(ID_Flush),
+    .IF_Controls_Flush(IF_Flush), //flushes the original IF/ID pipeline register data again to ID/EX pipeline register
+    .IF_ID_Write_Disable(IF_ID_WriteDisable), //Disables IM from writing new values to IF/ID pipeline
+    .EX_Controls_Flush(EX_Flush),
+    .PC_Write_Disable(PC_WriteDisable)
+	);
+MUX_2to1 #(.size(15)) ID_HazardFlush(
+	.data0_i(ID_HazardFlush_Src1),
+	.data1_i(15'd0),
+	.select_i(ID_Flush),
+	.result_o(ID_HazardFlush_Results)
+	);
+
 // 32-bit jump address
 assign ID_EX_i[189:185] = ID_instr_i[25:21]; //extra IF/ID Register Rs
-assign ID_EX_i[184:181] = ID_current_pc_plus_4_i[31:28];
+assign ID_EX_i[184:181] = ID_current_pc_plus_4_i[31:28]; 
 assign ID_EX_i[180:153] = ID_Jump_Addr_28_bits_o;
 
-assign ID_EX_i[152] = ID_Branch_o;
-assign ID_EX_i[151:150] = ID_MemToReg_o;
-assign ID_EX_i[149:148] = ID_BranchType_o;
-assign ID_EX_i[147] = ID_Jump_o;
-assign ID_EX_i[146] = ID_MemRead_o;
-assign ID_EX_i[145] = ID_MemWrite_o;
-assign ID_EX_i[144:142] = ID_ALUOp_o;
-assign ID_EX_i[141] = ID_ALUSrc_o;
-assign ID_EX_i[140] = ID_RegWrite_o;
-assign ID_EX_i[139:138] = ID_RegDst_o;
+assign ID_EX_i[152] = ID_HazardFlush_Results[14];
+assign ID_EX_i[151:150] = ID_HazardFlush_Results[13:12];
+assign ID_EX_i[149:148] = ID_HazardFlush_Results[11:10];
+assign ID_EX_i[147] = ID_HazardFlush_Results[9];
+assign ID_EX_i[146] = ID_HazardFlush_Results[8];
+assign ID_EX_i[145] = ID_HazardFlush_Results[7];
+assign ID_EX_i[144:142] = ID_HazardFlush_Results[6:4];
+assign ID_EX_i[141] = ID_HazardFlush_Results[3];
+assign ID_EX_i[140] = ID_HazardFlush_Results[2];
+assign ID_EX_i[139:138] = ID_HazardFlush_Results[1:0];
 assign ID_EX_i[137-:32] = ID_current_pc_plus_4_i;
 assign ID_EX_i[105-:32] = ID_Rs_data_o;
 assign ID_EX_i[73-:32] = ID_Rt_data_o;
@@ -254,16 +293,16 @@ Pipe_Reg #(.size(ID_EX_SIZE)) ID_EX(
 //Instantiate the components in EX stage
 
 assign EX_Jump_Addr_i = ID_EX_o[184:153];
-assign EX_Branch_i = ID_EX_o[152];
-assign EX_MemToReg_i = ID_EX_o[151:150];
-assign EX_BranchType_i = ID_EX_o[149:148];
-assign EX_Jump_i = ID_EX_o[147];
-assign EX_MemRead_i = ID_EX_o[146];
-assign EX_MemWrite_i = ID_EX_o[145];
+assign EX_Branch_i = ID_EX_o[152];         // 
+assign EX_MemToReg_i = ID_EX_o[151:150];   //
+assign EX_BranchType_i = ID_EX_o[149:148]; //
+assign EX_Jump_i = ID_EX_o[147];      //
+assign EX_MemRead_i = ID_EX_o[146];  //
+assign EX_MemWrite_i = ID_EX_o[145]; //
 assign EX_ALUOp_i = ID_EX_o[144:142];
 assign EX_ALUSrc_i = ID_EX_o[141];
-assign EX_RegWrite_i = ID_EX_o[140];
-assign EX_RegDst_i = ID_EX_o[139:138];
+assign EX_RegWrite_i = ID_EX_o[140]; //
+assign EX_RegDst_i = ID_EX_o[139:138];  //
 assign EX_current_pc_plus_4_i = ID_EX_o[137-:32];
 assign EX_Rs_data_i = ID_EX_o[105-:32];
 assign EX_Rt_data_i = ID_EX_o[73-:32];
@@ -296,6 +335,21 @@ ALU_Ctrl ALU_Control(
 	.ALUOp_i(EX_ALUOp_i),
 	.ALUCtrl_o(EX_ALUCtrl_o),
 	.Jump_Reg_o(EX_Jump_Reg_o)
+	);
+
+assign EX_HazardFlush_Src1[8] = EX_Branch_i;
+assign EX_HazardFlush_Src1[7:6] = EX_MemToReg_i;
+assign EX_HazardFlush_Src1[5:4] = EX_BranchType_i;
+assign EX_HazardFlush_Src1[3] = EX_Jump_i;
+assign EX_HazardFlush_Src1[2] = EX_MemRead_i;
+assign EX_HazardFlush_Src1[1] = EX_MemWrite_i;
+assign EX_HazardFlush_Src1[0] = EX_RegWrite_i;
+
+MUX_2to1 #(.size(9)) EX_HazardFlush(
+	.data0_i(EX_HazardFlush_Src1),
+	.data1_i(9'd0),
+	.select_i(EX_Flush),
+	.data_o(EX_HazardFlush_Results)
 	);
 
 MUX_3to1 #(.size(32)) ALU_Src1(
@@ -341,13 +395,13 @@ Forwarding_Unit ForwardingUnit( /////////////////////////////////
 
 assign EX_MEM_i[175:144] = EX_Jump_Addr_i;
 assign EX_MEM_i[143] = EX_Jump_Reg_o;
-assign EX_MEM_i[142] = EX_Branch_i;
-assign EX_MEM_i[141:140] = EX_MemToReg_i;
-assign EX_MEM_i[139:138] = EX_BranchType_i;
-assign EX_MEM_i[137] = EX_Jump_i;
-assign EX_MEM_i[136] = EX_MemRead_i;
-assign EX_MEM_i[135] = EX_MemWrite_i;
-assign EX_MEM_i[134] = EX_RegWrite_i;
+assign EX_MEM_i[142] = EX_HazardFlush_Results[8];
+assign EX_MEM_i[141:140] = EX_HazardFlush_Results[7:6];
+assign EX_MEM_i[139:138] = EX_HazardFlush_Results[5:4];
+assign EX_MEM_i[137] = EX_HazardFlush_Results[3];
+assign EX_MEM_i[136] = EX_HazardFlush_Results[2];
+assign EX_MEM_i[135] = EX_HazardFlush_Results[1];
+assign EX_MEM_i[134] = EX_HazardFlush_Results[0];
 assign EX_MEM_i[133:102] = EX_current_pc_plus_4_i;
 assign EX_MEM_i[101:70] = EX_Branch_Addr_o;
 assign EX_MEM_i[69] = EX_ALU_zero_o;
