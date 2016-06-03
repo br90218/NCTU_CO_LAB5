@@ -166,6 +166,7 @@ MUX_2to1 #(.size(32)) PC_selector(
 ProgramCounter PC(
 	.clk_i(clk_i),
 	.rst_i(rst_n),
+	.write_disable(PC_WriteDisable),
 	.pc_in_i(new_pc_to_IF),
 	.pc_out_o(IF_current_pc)
 	);
@@ -188,6 +189,8 @@ Pipe_Reg #(.size(IF_ID_SIZE)) IF_ID(       //N is the total length of input/outp
 	.rst_i(rst_n),
 	.clk_i(clk_i),
 	.data_i(IF_ID_i),
+	.write_disable(IF_ID_WriteDisable),
+	.flush(IF_Flush),
 	.data_o(IF_ID_o)
 	);
 
@@ -246,8 +249,9 @@ Sign_Extend Sign_Extend(
 Hazard_Detection_Unit Hazard_Detection(
 	.ID_EX_Register_Rt(EX_instr_i_20_16),
     .IF_ID_Register_Rs(ID_instr_i[25:21]),
-    .IF_ID_Register_Rt(ID_instr_i[20:21]),
+    .IF_ID_Register_Rt(ID_instr_i[20:16]),
     .ID_EX_MemRead(EX_MemRead_i),
+    .EX_MEM_Branch(MEM_Branch_mux),
     .ID_Controls_Flush(ID_Flush),
     .IF_Controls_Flush(IF_Flush), //flushes the original IF/ID pipeline register data again to ID/EX pipeline register
     .IF_ID_Write_Disable(IF_ID_WriteDisable), //Disables IM from writing new values to IF/ID pipeline
@@ -258,7 +262,7 @@ MUX_2to1 #(.size(15)) ID_HazardFlush(
 	.data0_i(ID_HazardFlush_Src1),
 	.data1_i(15'd0),
 	.select_i(ID_Flush),
-	.result_o(ID_HazardFlush_Results)
+	.data_o(ID_HazardFlush_Results)
 	);
 
 // 32-bit jump address
@@ -287,6 +291,8 @@ Pipe_Reg #(.size(ID_EX_SIZE)) ID_EX(
 	.rst_i(rst_n),
 	.clk_i(clk_i),
 	.data_i(ID_EX_i),
+	.write_disable(1'b0),
+	.flush(1'b0),
 	.data_o(ID_EX_o)
 	);
 
@@ -413,6 +419,8 @@ Pipe_Reg #(.size(EX_MEM_SIZE)) EX_MEM(
 	.rst_i(rst_n),
 	.clk_i(clk_i),
 	.data_i(EX_MEM_i),
+	.write_disable(1'b0),
+	.flush(1'b0),
 	.data_o(EX_MEM_o)
 	);
 
@@ -473,7 +481,7 @@ MUX_2to1 #(.size(32)) Jump_PC_selector(
 	.data_o(MEM_PC_result_Addr_o)
 	);
 
-assign MEM_Branch_mux = MEM_Branch_i & MEM_Branch_selector_o;
+assign MEM_Branch_mux = MEM_Branch_i & MEM_Branch_selector_o; //useless wire?
 
 assign MEM_WB_i[104] = MEM_Jump_Reg_i;
 assign MEM_WB_i[103:102] = MEM_MemToReg_i;
@@ -487,6 +495,8 @@ Pipe_Reg #(.size(MEM_WB_SIZE)) MEM_WB(
 	.rst_i(rst_n),
 	.clk_i(clk_i),
 	.data_i(MEM_WB_i),
+	.write_disable(1'b0),
+	.flush(1'b0),
 	.data_o(MEM_WB_o)
 	);
 
