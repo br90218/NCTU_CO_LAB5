@@ -1,4 +1,4 @@
-//Subject:		CO project 4 - Pipe CPU 1
+//Subject:		CO project 5 - The Arithmetic Logic Unit
 //--------------------------------------------------------------------------------
 //Version:		3
 //--------------------------------------------------------------------------------
@@ -246,12 +246,15 @@ Sign_Extend Sign_Extend(
 	.data_o(ID_sign_extended_val)
 	);
 
+wire Hazard_Detection_trigger;
+assign Hazard_Detection_trigger = MEM_Branch_mux | MEM_Jump_Reg_i | MEM_Jump_i;
+
 Hazard_Detection_Unit Hazard_Detection(
 	.ID_EX_Register_Rt(EX_instr_i_20_16),
     .IF_ID_Register_Rs(ID_instr_i[25:21]),
     .IF_ID_Register_Rt(ID_instr_i[20:16]),
     .ID_EX_MemRead(EX_MemRead_i),
-    .EX_MEM_Branch(MEM_Branch_mux),
+    .EX_MEM_Branch(Hazard_Detection_trigger), // todo: change trigger here
     .ID_Controls_Flush(ID_Flush),
     .IF_Controls_Flush(IF_Flush), //flushes the original IF/ID pipeline register data again to ID/EX pipeline register
     .IF_ID_Write_Disable(IF_ID_WriteDisable), //Disables IM from writing new values to IF/ID pipeline
@@ -267,7 +270,7 @@ MUX_2to1 #(.size(15)) ID_HazardFlush(
 
 // 32-bit jump address
 assign ID_EX_i[189:185] = ID_instr_i[25:21]; //extra IF/ID Register Rs
-assign ID_EX_i[184:181] = ID_current_pc_plus_4_i[31:28]; 
+assign ID_EX_i[184:181] = ID_current_pc_plus_4_i[31:28];
 assign ID_EX_i[180:153] = ID_Jump_Addr_28_bits_o;
 
 assign ID_EX_i[152] = ID_HazardFlush_Results[14];
@@ -299,7 +302,7 @@ Pipe_Reg #(.size(ID_EX_SIZE)) ID_EX(
 //Instantiate the components in EX stage
 
 assign EX_Jump_Addr_i = ID_EX_o[184:153];
-assign EX_Branch_i = ID_EX_o[152];         // 
+assign EX_Branch_i = ID_EX_o[152];         //
 assign EX_MemToReg_i = ID_EX_o[151:150];   //
 assign EX_BranchType_i = ID_EX_o[149:148]; //
 assign EX_Jump_i = ID_EX_o[147];      //
@@ -412,7 +415,8 @@ assign EX_MEM_i[133:102] = EX_current_pc_plus_4_i;
 assign EX_MEM_i[101:70] = EX_Branch_Addr_o;
 assign EX_MEM_i[69] = EX_ALU_zero_o;
 assign EX_MEM_i[68-:32] = EX_ALU_result_o;
-assign EX_MEM_i[36-:32] = EX_Rt_data_i;
+//assign EX_MEM_i[36-:32] = EX_Rt_data_i; maybe we can solve the hazard
+assign EX_MEM_i[36-:32] = ALU_Src2_o;
 assign EX_MEM_i[4:0] = EX_RegDst_addr_o;
 
 Pipe_Reg #(.size(EX_MEM_SIZE)) EX_MEM(
@@ -463,7 +467,7 @@ MUX_4to1 #(.size(1)) BranchType_selector(
 MUX_2to1 #(.size(32)) Mux_PC_Source_PC_plus4_branch(
 	.data0_i(MEM_current_pc_plus_4_i),
 	.data1_i(MEM_Branch_Addr_i),
-	.select_i(MEM_Branch_selector_o),
+	.select_i(MEM_Branch_mux),
 	.data_o(MEM_Mux_PC_Source_PC_plus4_branch_Addr_o)
 	);
 

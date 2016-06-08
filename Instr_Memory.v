@@ -1,26 +1,26 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date:     
-// Design Name: 
-// Module Name:    Instruction_Memory 
-// Project Name: 
-// Target Devices: 
-// Tool versions: 
-// Description: 
+// Company:
+// Engineer:
 //
-// Dependencies: 
+// Create Date:
+// Design Name:
+// Module Name:    Instruction_Memory
+// Project Name:
+// Target Devices:
+// Tool versions:
+// Description:
 //
-// Revision: 
-// Revision 
-// Additional Comments: 
+// Dependencies:
+//
+// Revision:
+// Revision
+// Additional Comments:
 //
 //////////////////////////////////////////////////////////////////////////////////
 module Instr_Memory
 (
-	addr_i, 
+	addr_i,
 	instr_o
 );
 
@@ -36,10 +36,10 @@ initial begin
 
     for ( i=0; i<32; i=i+1 )
             Instr_Mem[i] = 32'b0;
-        
-    $readmemb("test/CO_P5_test1_branchtest.txt", Instr_Mem);  //Read instruction from "CO_P5_test1.txt"   
+
+    $readmemb("test/CO_P5_test2_jal.txt", Instr_Mem);  //Read instruction from "CO_P5_test1.txt"
 end
 
-assign	instr_o = Instr_Mem[addr_i/4];  
+assign	instr_o = Instr_Mem[addr_i/4];
 
 endmodule
